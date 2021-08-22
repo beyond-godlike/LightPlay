@@ -1,0 +1,92 @@
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+    id 'kotlin-android-extensions'
+    id 'kotlin-kapt'
+    id 'dagger.hilt.android.plugin'
+    id 'androidx.navigation.safeargs.kotlin'
+    id 'com.google.gms.google-services'
+}
+
+android {
+    compileSdkVersion 30
+    buildToolsVersion "30.0.3"
+
+    defaultConfig {
+        applicationId "com.unava.dia.lightplay"
+        minSdkVersion 19
+        targetSdkVersion 30
+        versionCode 1
+        versionName "1.0"
+
+        multiDexEnabled true
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+}
+
+dependencies {
+
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    implementation 'androidx.core:core-ktx:1.6.0'
+    implementation 'androidx.appcompat:appcompat:1.3.1'
+    implementation 'com.google.android.material:material:1.4.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
+
+    implementation "androidx.lifecycle:lifecycle-service:2.2.0"
+
+    // Material Design
+    implementation 'com.google.android.material:material:1.3.0-alpha01'
+
+    // Navigation Components
+    implementation "androidx.navigation:navigation-fragment-ktx:2.3.0"
+    implementation "androidx.navigation:navigation-ui-ktx:2.3.0"
+
+    // Firebase Firestore
+    implementation 'com.google.firebase:firebase-firestore:21.6.0'
+
+    // Firebase Storage KTX
+    implementation 'com.google.firebase:firebase-storage-ktx:19.2.0'
+
+    // ExoPlayer
+    api "com.google.android.exoplayer:exoplayer-core:2.11.8"
+    api "com.google.android.exoplayer:exoplayer-ui:2.11.8"
+    api "com.google.android.exoplayer:extension-mediasession:2.11.8"
+
+    // Multidex
+
+    // Firebase Coroutines
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.1.1'
+
+    // Dagger Core
+    implementation "com.google.dagger:dagger:2.28.1"
+    kapt "com.google.dagger:dagger-compiler:2.25.2"
+
+    // Easy Permissions
+    implementation 'pub.devrel:easypermissions:3.0.0'
+
+    //Dagger - Hilt
+    implementation "com.google.dagger:hilt-android:2.35.1"
+    kapt "com.google.dagger:hilt-android-compiler:2.35"
+
+    implementation 'android.arch.lifecycle:extensions:1.1.1'
+
+
+    testImplementation 'junit:junit:4.+'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.3'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
+}
