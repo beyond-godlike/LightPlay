@@ -5,14 +5,21 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.bumptech.glide.RequestManager
 import com.unava.dia.lightplay.R
 import com.unava.dia.lightplay.other.AppConstants.ACTION_START_SERVICE
 import com.unava.dia.lightplay.other.AppConstants.ACTION_STOP_SERVICE
 import com.unava.dia.lightplay.service.PlayService
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.android.synthetic.main.activity_main.*
+import javax.inject.Inject
 
 
+@AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
+
+    @Inject
+    lateinit var glide: RequestManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

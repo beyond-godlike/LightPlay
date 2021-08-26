@@ -1,39 +1,44 @@
 package com.unava.dia.lightplay.service
 
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.NotificationManager.IMPORTANCE_LOW
 import android.app.PendingIntent
-import android.app.PendingIntent.FLAG_UPDATE_CURRENT
-import android.content.Context
-import android.content.Intent
-import android.media.MediaPlayer
-import android.net.Uri
-import android.os.Build
-import androidx.annotation.RequiresApi
+import android.os.Bundle
+import android.support.v4.media.MediaBrowserCompat
+import android.support.v4.media.session.MediaSessionCompat
 import androidx.core.app.NotificationCompat
-import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.MutableLiveData
-import com.unava.dia.lightplay.R
-import com.unava.dia.lightplay.other.AppConstants.ACTION_PAUSE_SERVICE
-import com.unava.dia.lightplay.other.AppConstants.ACTION_RESUME_SERVICE
-import com.unava.dia.lightplay.other.AppConstants.ACTION_START_SERVICE
-import com.unava.dia.lightplay.other.AppConstants.ACTION_STOP_SERVICE
-import com.unava.dia.lightplay.other.AppConstants.NOTIFICATION_CHANNEL_ID
-import com.unava.dia.lightplay.other.AppConstants.NOTIFICATION_CHANNEL_NAME
-import com.unava.dia.lightplay.other.AppConstants.NOTIFICATION_ID
+import androidx.media.MediaBrowserServiceCompat
+import com.google.android.exoplayer2.SimpleExoPlayer
+import com.google.android.exoplayer2.ext.mediasession.MediaSessionConnector
+import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory
+import com.unava.dia.lightplay.service.callbacks.SongsNotificationListener
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import javax.inject.Inject
 
 
-@AndroidEntryPoint
-class PlayService : LifecycleService() {
+private const val SERVICE_TAG = "PlayService"
 
-    private lateinit var mPlayer: MediaPlayer
+@AndroidEntryPoint
+class PlayService : MediaBrowserServiceCompat() {
+    @Inject
+    lateinit var dataSourceFactory: DefaultDataSourceFactory
+
+    @Inject
+    lateinit var exoPlayer: SimpleExoPlayer
+
+    private lateinit var musicNotificationManager: MusicNotificationManager
+
+    private val serviceJob = Job()
+    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
+
+    private lateinit var mediaSession: MediaSessionCompat
+    private lateinit var mediaSessionConnector: MediaSessionConnector
+
+    var isForeground = false
 
 
     private var length: Int = 0
@@ -44,147 +49,45 @@ class PlayService : LifecycleService() {
     @Inject
     lateinit var baseNotificationBuilder: NotificationCompat.Builder
 
-    var serviceKilled = false
-
-    companion object {
-        val isPlaying = MutableLiveData<Boolean>()
-    }
-
-    private fun postInitialValues() {
-        isPlaying.postValue(false)
-    }
 
     override fun onCreate() {
         super.onCreate()
-        postInitialValues()
-        notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        isPlaying.observe(this, {
-            updateNotification(it)
-        })
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        intent?.let {
-            when (it.action) {
-                ACTION_START_SERVICE -> {
-                    val str: String = intent.getStringExtra("URI") ?: ""
-                    if (str.isNotEmpty())
-                        startForegroundService(str)
-                }
-                ACTION_RESUME_SERVICE -> {
-                    resumeService()
-                }
-                ACTION_PAUSE_SERVICE -> {
-                    pauseService()
-                }
-                ACTION_STOP_SERVICE -> {
-                    killService()
-                }
-            }
+        val activityIntent = packageManager?.getLaunchIntentForPackage(packageName)?.let {
+            PendingIntent.getActivity(this, 0, it, 0)
         }
-        return super.onStartCommand(intent, flags, startId)
-    }
-
-    private fun resumeService() {
-        mPlayer.seekTo(length)
-        mPlayer.start()
-
-        isPlaying.postValue(true)
-    }
-    private fun pauseService() {
-        mPlayer.pause()
-        length = mPlayer.currentPosition
-
-        isPlaying.postValue(false)
-    }
-
-    private fun startForegroundService(str: String) {
-        mPlayer = MediaPlayer.create(this, Uri.parse(str))
-        isPlaying.postValue(true)
-        mPlayer.start()
-        startTimer()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            createNotificationChannel(notificationManager!!)
+        mediaSession = MediaSessionCompat(this, SERVICE_TAG).apply {
+            setSessionActivity(activityIntent)
+            isActive = true
         }
+        sessionToken = mediaSession.sessionToken
+        musicNotificationManager = MusicNotificationManager(
+            this,
+            mediaSession.sessionToken,
+            SongsNotificationListener(this)
+        ) {
 
-        startForeground(
-            NOTIFICATION_ID,
-            baseNotificationBuilder.setProgress(mPlayer.duration, mPlayer.currentPosition, false)
-                .build()
-        )
-
-        time.observe(this, {
-            if (!serviceKilled) {
-                notificationManager!!.notify(NOTIFICATION_ID, baseNotificationBuilder
-                    .setProgress(mPlayer.duration, mPlayer.currentPosition, false)
-                    .build())
-            }
-        })
+        }
+        mediaSessionConnector = MediaSessionConnector(mediaSession)
+        mediaSessionConnector.setPlayer(exoPlayer)
     }
 
-    private fun updateNotification(isPlaying: Boolean) {
-        val notificationActionText = if (isPlaying) "Pause" else "Resume"
-
-        val pendingIntent = if (isPlaying) {
-            val pauseIntent = Intent(this, PlayService::class.java).apply {
-                action = ACTION_PAUSE_SERVICE
-            }
-            PendingIntent.getService(this, 1, pauseIntent, FLAG_UPDATE_CURRENT)
-        } else {
-            val resumeIntent = Intent(this, PlayService::class.java).apply {
-                action = ACTION_RESUME_SERVICE
-            }
-            PendingIntent.getService(this, 2, resumeIntent, FLAG_UPDATE_CURRENT)
-        }
-
-
-        baseNotificationBuilder.javaClass.getDeclaredField("mActions").apply {
-            isAccessible = true
-            set(baseNotificationBuilder, ArrayList<NotificationCompat.Action>())
-        }
-        if (!serviceKilled) {
-            if(!isPlaying) {
-                baseNotificationBuilder
-                    .addAction(R.drawable.ic_play, notificationActionText, pendingIntent)
-                    .setProgress(mPlayer.duration, mPlayer.duration, false)
-            } else {
-                baseNotificationBuilder
-                    .addAction(R.drawable.ic_pause, notificationActionText, pendingIntent)
-                    .setProgress(mPlayer.duration, mPlayer.duration, false)
-            }
-            notificationManager?.notify(NOTIFICATION_ID, baseNotificationBuilder.build())
-        }
+    override fun onDestroy() {
+        super.onDestroy()
+        serviceScope.cancel()
     }
 
-    private fun startTimer() {
-        CoroutineScope(Dispatchers.Main).launch {
-            while (mPlayer.currentPosition < mPlayer.duration) {
-                time.postValue(mPlayer.currentPosition)
-                delay(600)
-            }
-        }
+    override fun onGetRoot(
+        clientPackageName: String,
+        clientUid: Int,
+        rootHints: Bundle?
+    ): BrowserRoot? {
+        return null
     }
 
-    private fun killService() {
-        serviceKilled = true
-        mPlayer.stop()
-        pauseService()
-        postInitialValues()
-        stopForeground(true)
-        stopSelf()
-    }
-
-
-    @RequiresApi(Build.VERSION_CODES.O)
-    private fun createNotificationChannel(notificationManager: NotificationManager) {
-        val channel = NotificationChannel(
-            NOTIFICATION_CHANNEL_ID,
-            NOTIFICATION_CHANNEL_NAME,
-            IMPORTANCE_LOW
-        )
-        notificationManager.createNotificationChannel(channel)
+    override fun onLoadChildren(
+        parentId: String,
+        result: Result<MutableList<MediaBrowserCompat.MediaItem>>
+    ) {
     }
 
 }

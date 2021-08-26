@@ -10,5 +10,8 @@ object AppConstants {
 
     const val NOTIFICATION_CHANNEL_ID = "tracking_channel"
     const val NOTIFICATION_CHANNEL_NAME = "Playing"
+    const val NOTIFICATION_CHANNEL_DESCRIPTION = "Playing"
     const val NOTIFICATION_ID = 1
+
+    const val SONG_LIST = "songs"
 }
